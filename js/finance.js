@@ -1,7 +1,16 @@
 
+/* =====================================
+   MONETRA
+   FINANCE MANAGEMENT
+===================================== */
+
 import { getTransactions } from "./transactions.js";
 
-// Format angka menjadi Rupiah
+
+/* =====================================
+   FORMAT RUPIAH
+===================================== */
+
 export function formatRupiah(amount) {
     return new Intl.NumberFormat("id-ID", {
         style: "currency",
@@ -11,141 +20,239 @@ export function formatRupiah(amount) {
     }).format(Number(amount) || 0);
 }
 
-// Menghitung total pemasukan
+
+/* =====================================
+   NORMALIZE TRANSACTION DATA
+===================================== */
+
+function normalizeTransactions(transactions) {
+    return Array.isArray(transactions) ? transactions : [];
+}
+
+
+/* =====================================
+   CALCULATE INCOME
+===================================== */
+
 export function calculateIncome(transactions) {
-    return transactions
+    return normalizeTransactions(transactions)
         .filter(item => item.type === "income")
-        .reduce((total, item) => total + Number(item.amount || 0), 0);
+        .reduce(
+            (total, item) => total + (Number(item.amount) || 0),
+            0
+        );
 }
 
-// Menghitung total pengeluaran
+
+/* =====================================
+   CALCULATE EXPENSE
+===================================== */
+
 export function calculateExpense(transactions) {
-    return transactions
-        .filter(item => item.type === "expense")
-        .reduce((total, item) => total + Number(item.amount || 0), 0);
+    return normalizeTransactions(transactions)
+        .filter(item => item.type !== "income")
+        .reduce(
+            (total, item) => total + (Number(item.amount) || 0),
+            0
+        );
 }
 
-// Menghitung saldo berdasarkan transaksi
+
+/* =====================================
+   CALCULATE BALANCE
+===================================== */
+
 export function calculateBalance(transactions) {
-    return calculateIncome(transactions) - calculateExpense(transactions);
+    return calculateIncome(transactions) -
+        calculateExpense(transactions);
 }
 
-// Menghitung ringkasan keuangan bulanan
+
+/* =====================================
+   MONTHLY FINANCIAL SUMMARY
+===================================== */
+
 export function calculateMonthlySummary(transactions) {
-    const income = calculateIncome(transactions);
-    const expense = calculateExpense(transactions);
+    const data = normalizeTransactions(transactions);
+
+    const income = calculateIncome(data);
+    const expense = calculateExpense(data);
 
     return {
         income,
         expense,
         balance: income - expense,
-        transactionCount: transactions.length
+        transactionCount: data.length
     };
 }
 
-// Menghitung ringkasan berdasarkan kategori
+
+/* =====================================
+   CATEGORY SUMMARY
+===================================== */
+
 export function calculateCategorySummary(transactions) {
     const categories = {};
 
-    transactions.forEach(item => {
-        const category = item.category || "Lainnya";
+    normalizeTransactions(transactions).forEach(item => {
+        const category = String(item.category || "Lainnya");
 
-        if (!categories[category]) {
+        if (!Object.prototype.hasOwnProperty.call(categories, category)) {
             categories[category] = {
                 income: 0,
                 expense: 0
             };
         }
 
-        if (item.type === "income") {
-            categories[category].income += Number(item.amount || 0);
-        }
+        const amount = Number(item.amount) || 0;
 
-        if (item.type === "expense") {
-            categories[category].expense += Number(item.amount || 0);
+        if (item.type === "income") {
+            categories[category].income += amount;
+        } else {
+            categories[category].expense += amount;
         }
     });
 
     return categories;
 }
 
-// Mengambil dan menghitung data bulan tertentu
+
+/* =====================================
+   GET MONTHLY SUMMARY
+===================================== */
+
 export async function getMonthlySummary(uid, year, month) {
-    const result = await getTransactions(uid);
+    try {
+        if (!uid) {
+            throw new Error("Pengguna belum login.");
+        }
 
-    if (!result.success) {
+        const yearNumber = Number(year);
+        const monthNumber = Number(month);
+
+        if (
+            !Number.isInteger(yearNumber) ||
+            yearNumber < 1900 ||
+            yearNumber > 9999 ||
+            !Number.isInteger(monthNumber) ||
+            monthNumber < 1 ||
+            monthNumber > 12
+        ) {
+            throw new Error("Tahun atau bulan tidak valid.");
+        }
+
+        const transactions = await getTransactions(uid);
+
+        const monthKey = String(monthNumber).padStart(2, "0");
+
+        const monthlyTransactions = transactions.filter(item =>
+            String(item.date || "").startsWith(
+                `${yearNumber}-${monthKey}`
+            )
+        );
+
+        return {
+            success: true,
+            data: {
+                ...calculateMonthlySummary(monthlyTransactions),
+                transactions: monthlyTransactions,
+                categories: calculateCategorySummary(monthlyTransactions)
+            }
+        };
+
+    } catch (error) {
+        console.error("Monetra Monthly Summary Error:", error);
+
         return {
             success: false,
-            message: result.message,
+            message: error.message || "Gagal mengambil ringkasan bulanan.",
             data: null
         };
     }
-
-    const monthNumber = String(month).padStart(2, "0");
-
-    const monthlyTransactions = result.data.filter(item => {
-        if (!item.date) return false;
-
-        return item.date.startsWith(`${year}-${monthNumber}`);
-    });
-
-    return {
-        success: true,
-        data: {
-            ...calculateMonthlySummary(monthlyTransactions),
-            transactions: monthlyTransactions,
-            categories: calculateCategorySummary(monthlyTransactions)
-        }
-    };
 }
 
-// Mengambil ringkasan tahunan
+
+/* =====================================
+   GET YEARLY SUMMARY
+===================================== */
+
 export async function getYearlySummary(uid, year) {
-    const result = await getTransactions(uid);
+    try {
+        if (!uid) {
+            throw new Error("Pengguna belum login.");
+        }
 
-    if (!result.success) {
+        const yearNumber = Number(year);
+
+        if (
+            !Number.isInteger(yearNumber) ||
+            yearNumber < 1900 ||
+            yearNumber > 9999
+        ) {
+            throw new Error("Tahun tidak valid.");
+        }
+
+        const transactions = await getTransactions(uid);
+
+        const yearlyTransactions = transactions.filter(item =>
+            String(item.date || "").startsWith(`${yearNumber}-`)
+        );
+
+        const monthlyData = {};
+
+        for (let month = 1; month <= 12; month++) {
+            const monthKey = String(month).padStart(2, "0");
+
+            const monthlyTransactions = yearlyTransactions.filter(item =>
+                String(item.date || "").startsWith(
+                    `${yearNumber}-${monthKey}`
+                )
+            );
+
+            monthlyData[monthKey] = calculateMonthlySummary(
+                monthlyTransactions
+            );
+        }
+
+        return {
+            success: true,
+            data: {
+                ...calculateMonthlySummary(yearlyTransactions),
+                months: monthlyData,
+                transactions: yearlyTransactions
+            }
+        };
+
+    } catch (error) {
+        console.error("Monetra Yearly Summary Error:", error);
+
         return {
             success: false,
-            message: result.message,
+            message: error.message || "Gagal mengambil ringkasan tahunan.",
             data: null
         };
     }
-
-    const yearlyTransactions = result.data.filter(item =>
-        item.date && item.date.startsWith(`${year}-`)
-    );
-
-    const monthlyData = {};
-
-    for (let month = 1; month <= 12; month++) {
-        const monthKey = String(month).padStart(2, "0");
-
-        const monthlyTransactions = yearlyTransactions.filter(item =>
-            item.date.startsWith(`${year}-${monthKey}`)
-        );
-
-        monthlyData[monthKey] = calculateMonthlySummary(
-            monthlyTransactions
-        );
-    }
-
-    return {
-        success: true,
-        data: {
-            ...calculateMonthlySummary(yearlyTransactions),
-            months: monthlyData
-        }
-    };
 }
 
-// Menghitung persentase pengeluaran
+
+/* =====================================
+   EXPENSE PERCENTAGE
+===================================== */
+
 export function calculateExpensePercentage(transactions) {
     const income = calculateIncome(transactions);
     const expense = calculateExpense(transactions);
 
-    if (income <= 0) return 0;
+    if (income <= 0) {
+        return 0;
+    }
 
     return Math.round((expense / income) * 100);
 }
+
+
+/* =====================================
+   FINANCE SYSTEM STATUS
+===================================== */
 
 console.log("Monetra Finance System berhasil dimuat.");
