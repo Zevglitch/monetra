@@ -6,41 +6,46 @@ import {
     sendPasswordResetEmail,
     onAuthStateChanged,
     updateProfile
-} from
-    "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
 
 import {
     auth,
     authPersistence
 } from "./firebase.js";
 
-// ======================================
-// MENUNGGU FIREBASE SIAP
-// ======================================
+// ========================================
+// 1. FIREBASE INITIALIZATION
+// ========================================
 
 async function waitForFirebase() {
-    await authPersistence;
+    if (authPersistence) {
+        await authPersistence;
+    }
+
+    if (!auth) {
+        throw new Error("Firebase Authentication belum tersedia.");
+    }
 }
 
-// ======================================
-// PESAN ERROR FIREBASE
-// ======================================
+// ========================================
+// 2. ERROR HANDLER
+// ========================================
 
 export function getAuthErrorMessage(error) {
-    const errorCode = error?.code || "";
+    const code = error?.code || "";
 
     const messages = {
         "auth/email-already-in-use":
-            "Email ini sudah digunakan oleh akun lain.",
+            "Email ini sudah digunakan.",
 
         "auth/invalid-email":
             "Format email tidak valid.",
 
         "auth/weak-password":
-            "Password terlalu lemah. Gunakan minimal 6 karakter.",
+            "Password terlalu lemah. Minimal 6 karakter.",
 
         "auth/user-not-found":
-            "Akun dengan email tersebut tidak ditemukan.",
+            "Akun tidak ditemukan.",
 
         "auth/wrong-password":
             "Password yang kamu masukkan salah.",
@@ -52,45 +57,65 @@ export function getAuthErrorMessage(error) {
             "Email atau password salah.",
 
         "auth/user-disabled":
-            "Akun ini telah dinonaktifkan.",
+            "Akun telah dinonaktifkan.",
 
         "auth/too-many-requests":
-            "Terlalu banyak percobaan. Silakan coba beberapa saat lagi.",
+            "Terlalu banyak percobaan. Coba lagi nanti.",
 
         "auth/network-request-failed":
-            "Koneksi internet bermasalah. Periksa jaringanmu.",
+            "Koneksi internet bermasalah.",
 
         "auth/operation-not-allowed":
-            "Metode login belum diaktifkan di Firebase.",
+            "Metode autentikasi belum diaktifkan.",
 
         "auth/missing-password":
-            "Password belum diisi.",
+            "Password wajib diisi.",
 
         "auth/missing-email":
-            "Email belum diisi.",
+            "Email wajib diisi.",
 
         "auth/requires-recent-login":
-            "Silakan login kembali untuk melakukan tindakan ini.",
+            "Silakan login kembali.",
 
         "auth/unauthorized-domain":
-            "Domain website belum diizinkan di Firebase."
+            "Domain website belum diizinkan di Firebase.",
+
+        "auth/expired-action-code":
+            "Link tindakan sudah kedaluwarsa.",
+
+        "auth/invalid-action-code":
+            "Link tindakan tidak valid."
     };
 
-    return messages[errorCode] ||
+    return messages[code] ||
         error?.message ||
         "Terjadi kesalahan. Silakan coba kembali.";
 }
 
-// ======================================
-// PENDAFTARAN AKUN
-// ======================================
+// ========================================
+// 3. VALIDATION
+// ========================================
+
+function validateEmail(email) {
+    const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return pattern.test(email);
+}
+
+function validatePassword(password) {
+    return typeof password === "string" &&
+        password.length >= 6;
+}
+
+// ========================================
+// 4. REGISTER
+// ========================================
 
 export async function registerUser(name, email, password) {
     try {
         await waitForFirebase();
 
         const cleanName = String(name || "").trim();
-        const cleanEmail = String(email || "").trim();
+        const cleanEmail = String(email || "").trim().toLowerCase();
 
         if (!cleanName || !cleanEmail || !password) {
             return {
@@ -99,7 +124,14 @@ export async function registerUser(name, email, password) {
             };
         }
 
-        if (password.length < 6) {
+        if (!validateEmail(cleanEmail)) {
+            return {
+                success: false,
+                message: "Format email tidak valid."
+            };
+        }
+
+        if (!validatePassword(password)) {
             return {
                 success: false,
                 message: "Password minimal 6 karakter."
@@ -119,34 +151,41 @@ export async function registerUser(name, email, password) {
         return {
             success: true,
             user: credential.user,
-            message: "Pendaftaran berhasil."
+            message: "Akun berhasil dibuat."
         };
 
     } catch (error) {
-        console.error("Monetra register error:", error);
+        console.error("Monetra Register Error:", error);
 
         return {
             success: false,
             message: getAuthErrorMessage(error),
-            code: error.code || "unknown"
+            code: error?.code || "unknown"
         };
     }
 }
 
-// ======================================
-// LOGIN AKUN
-// ======================================
+// ========================================
+// 5. LOGIN
+// ========================================
 
 export async function loginUser(email, password) {
     try {
         await waitForFirebase();
 
-        const cleanEmail = String(email || "").trim();
+        const cleanEmail = String(email || "").trim().toLowerCase();
 
         if (!cleanEmail || !password) {
             return {
                 success: false,
                 message: "Email dan password wajib diisi."
+            };
+        }
+
+        if (!validateEmail(cleanEmail)) {
+            return {
+                success: false,
+                message: "Format email tidak valid."
             };
         }
 
@@ -163,19 +202,19 @@ export async function loginUser(email, password) {
         };
 
     } catch (error) {
-        console.error("Monetra login error:", error);
+        console.error("Monetra Login Error:", error);
 
         return {
             success: false,
             message: getAuthErrorMessage(error),
-            code: error.code || "unknown"
+            code: error?.code || "unknown"
         };
     }
 }
 
-// ======================================
-// LOGOUT
-// ======================================
+// ========================================
+// 6. LOGOUT
+// ========================================
 
 export async function logoutUser() {
     try {
@@ -189,26 +228,33 @@ export async function logoutUser() {
         };
 
     } catch (error) {
-        console.error("Monetra logout error:", error);
+        console.error("Monetra Logout Error:", error);
 
         throw new Error(getAuthErrorMessage(error));
     }
 }
 
-// ======================================
-// RESET PASSWORD
-// ======================================
+// ========================================
+// 7. RESET PASSWORD
+// ========================================
 
 export async function resetPassword(email) {
     try {
         await waitForFirebase();
 
-        const cleanEmail = String(email || "").trim();
+        const cleanEmail = String(email || "").trim().toLowerCase();
 
         if (!cleanEmail) {
             return {
                 success: false,
-                message: "Masukkan alamat email terlebih dahulu."
+                message: "Masukkan email terlebih dahulu."
+            };
+        }
+
+        if (!validateEmail(cleanEmail)) {
+            return {
+                success: false,
+                message: "Format email tidak valid."
             };
         }
 
@@ -216,23 +262,23 @@ export async function resetPassword(email) {
 
         return {
             success: true,
-            message: "Email reset password berhasil dikirim."
+            message: "Link reset password berhasil dikirim ke email."
         };
 
     } catch (error) {
-        console.error("Monetra reset password error:", error);
+        console.error("Monetra Reset Password Error:", error);
 
         return {
             success: false,
             message: getAuthErrorMessage(error),
-            code: error.code || "unknown"
+            code: error?.code || "unknown"
         };
     }
 }
 
-// ======================================
-// MEMANTAU STATUS LOGIN
-// ======================================
+// ========================================
+// 8. AUTH OBSERVER
+// ========================================
 
 export function observeAuth(callback) {
     if (typeof callback !== "function") {
@@ -242,18 +288,30 @@ export function observeAuth(callback) {
     return onAuthStateChanged(
         auth,
         user => {
-            callback(user);
+            try {
+                callback(user);
+            } catch (error) {
+                console.error("Monetra Auth Callback Error:", error);
+            }
         },
         error => {
-            console.error("Monetra auth observer error:", error);
+            console.error("Monetra Auth Observer Error:", error);
         }
     );
 }
 
-// ======================================
-// MENDAPATKAN USER AKTIF
-// ======================================
+// ========================================
+// 9. CURRENT USER
+// ========================================
 
 export function getCurrentUser() {
-    return auth.currentUser;
+    return auth?.currentUser || null;
+}
+
+// ========================================
+// 10. AUTH STATE
+// ========================================
+
+export function isUserLoggedIn() {
+    return Boolean(auth?.currentUser);
 }
