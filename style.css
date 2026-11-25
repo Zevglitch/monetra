@@ -1,0 +1,751 @@
+
+/* =========================================
+   MONETRA - ZETHER DESIGN SYSTEM
+   Dark Minimalist Finance Dashboard
+========================================= */
+
+:root {
+    --bg: #0b0b0c;
+    --surface: #141416;
+    --surface-2: #1b1b1e;
+    --surface-3: #222226;
+    --border: #2b2b30;
+
+    --white: #f5f5f5;
+    --text: #dedee0;
+    --muted: #85858c;
+
+    --success: #b8d8c0;
+    --danger: #e0aaaa;
+    --accent: #d5d5d5;
+
+    --radius: 14px;
+    --transition: .25s ease;
+}
+
+/* RESET */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+img {
+    max-width: 100%;
+}
+
+/* =========================================
+   LOADING SCREEN
+========================================= */
+
+#monetra-loading {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    background: var(--bg) !important;
+    padding: 20px;
+}
+
+.loading-content {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+}
+
+.loading-logo {
+    color: var(--white);
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: 7px;
+    margin: 0;
+    padding: 0;
+}
+
+.loading-subtitle {
+    margin-top: 8px;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+.loading-animation {
+    width: 35px;
+    height: 35px;
+    margin-top: 38px;
+    border: 2px solid #29292d;
+    border-top-color: #eeeeee;
+    border-radius: 50%;
+    animation: loadingSpin .8s linear infinite;
+}
+
+.loading-status {
+    margin-top: 20px;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+.loading-watermark {
+    position: absolute;
+    bottom: 25px;
+    color: #555;
+    font-size: 9px;
+    letter-spacing: 5px;
+}
+
+@keyframes loadingSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* =========================================
+   AUTHENTICATION
+========================================= */
+
+.monetra-auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 25px 18px;
+    background: var(--bg);
+}
+
+.monetra-auth-card {
+    width: 100%;
+    max-width: 410px;
+    padding: 32px 26px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+}
+
+.monetra-auth-logo {
+    color: var(--white);
+    text-align: center;
+    font-size: 30px;
+    font-weight: 900;
+    letter-spacing: 4px;
+}
+
+.monetra-auth-subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin: 8px 0 30px;
+}
+
+.monetra-auth-heading {
+    color: var(--white);
+    font-size: 22px;
+    margin-bottom: 7px;
+}
+
+.monetra-auth-description {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 25px;
+}
+
+.monetra-field {
+    margin-bottom: 17px;
+}
+
+.monetra-field label {
+    display: block;
+    color: var(--text);
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.monetra-field input {
+    width: 100%;
+    padding: 13px 14px;
+    background: #101012;
+    color: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    outline: none;
+    transition: var(--transition);
+}
+
+.monetra-field input:focus {
+    border-color: #777;
+}
+
+.monetra-auth-button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 8px;
+    border: none;
+    border-radius: 9px;
+    background: var(--white);
+    color: #111;
+    font-weight: 700;
+    transition: var(--transition);
+}
+
+.monetra-auth-button:hover {
+    background: #d0d0d0;
+}
+
+.monetra-auth-links {
+    text-align: center;
+    margin-top: 22px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.monetra-auth-links button {
+    color: var(--white);
+    background: transparent;
+    border: none;
+    padding: 5px;
+}
+
+.monetra-auth-watermark {
+    margin-top: 28px;
+    color: #555;
+    font-size: 9px;
+    letter-spacing: 4px;
+    text-align: center;
+}
+
+/* =========================================
+   MAIN APP
+========================================= */
+
+#app {
+    min-height: 100vh;
+    background: var(--bg);
+}
+
+.monetra-container {
+    width: 100%;
+    max-width: 1250px;
+    margin: auto;
+    padding: 24px;
+}
+
+/* HEADER */
+
+.monetra-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+}
+
+.monetra-brand {
+    color: var(--white);
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 3px;
+}
+
+.monetra-header small {
+    display: block;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+/* NAVIGATION */
+
+.monetra-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 22px 0;
+}
+
+.monetra-nav button,
+.monetra-nav a {
+    padding: 10px 15px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    transition: var(--transition);
+}
+
+.monetra-nav button:hover,
+.monetra-nav a:hover,
+.monetra-nav .active {
+    color: var(--white);
+    background: var(--surface-3);
+    border-color: #555;
+}
+
+/* PAGE TITLE */
+
+.monetra-page-title {
+    margin: 25px 0 18px;
+}
+
+.monetra-page-title h1 {
+    color: var(--white);
+    font-size: 25px;
+    font-weight: 700;
+}
+
+.monetra-page-title p {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* =========================================
+   CARDS
+========================================= */
+
+.monetra-card,
+.dashboard-card,
+.stat-card,
+.budget-card,
+.transaction-card,
+.report-card {
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: var(--transition);
+}
+
+.monetra-card:hover,
+.dashboard-card:hover,
+.stat-card:hover,
+.budget-card:hover {
+    border-color: #48484d;
+}
+
+.card-title {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+
+.card-value {
+    color: var(--white);
+    font-size: 23px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+/* GRID */
+
+.monetra-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 15px;
+}
+
+/* =========================================
+   BUTTONS
+========================================= */
+
+.btn,
+.monetra-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 16px;
+    background: var(--white);
+    color: #111;
+    border: none;
+    border-radius: 9px;
+    font-weight: 700;
+    transition: var(--transition);
+}
+
+.btn:hover,
+.monetra-button:hover {
+    background: #d0d0d0;
+}
+
+.btn-secondary {
+    background: var(--surface-3);
+    color: var(--white);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+    background: #303035;
+}
+
+.btn-danger {
+    background: #432626;
+    color: #f1bcbc;
+}
+
+/* =========================================
+   FORMS
+========================================= */
+
+.monetra-form {
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.monetra-form label {
+    display: block;
+    color: var(--text);
+    font-size: 12px;
+    margin-bottom: 7px;
+}
+
+.monetra-form input,
+.monetra-form select,
+.monetra-form textarea,
+.monetra-input {
+    width: 100%;
+    padding: 12px 13px;
+    margin-bottom: 15px;
+    background: #101012;
+    color: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    outline: none;
+}
+
+.monetra-form input:focus,
+.monetra-form select:focus,
+.monetra-form textarea:focus,
+.monetra-input:focus {
+    border-color: #777;
+}
+
+/* =========================================
+   TRANSACTIONS
+========================================= */
+
+.transaction-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.transaction-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.transaction-card h3 {
+    color: var(--white);
+    font-size: 14px;
+}
+
+.transaction-card p {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.income,
+.text-income {
+    color: var(--success) !important;
+}
+
+.expense,
+.text-expense {
+    color: var(--danger) !important;
+}
+
+/* =========================================
+   BUDGET
+========================================= */
+
+.budget-progress {
+    height: 7px;
+    width: 100%;
+    overflow: hidden;
+    background: #303035;
+    border-radius: 20px;
+    margin: 14px 0;
+}
+
+.budget-progress-bar {
+    height: 100%;
+    background: #c9c9c9;
+    border-radius: 20px;
+}
+
+/* =========================================
+   TABLE
+========================================= */
+
+.monetra-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.monetra-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 550px;
+}
+
+.monetra-table th,
+.monetra-table td {
+    padding: 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.monetra-table th {
+    color: var(--muted);
+    background: var(--surface);
+    font-size: 11px;
+}
+
+.monetra-table td {
+    color: var(--text);
+    font-size: 12px;
+}
+
+/* =========================================
+   REPORTS
+========================================= */
+
+.report-section {
+    margin-top: 20px;
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.report-section h3 {
+    color: var(--white);
+    font-size: 15px;
+    margin-bottom: 15px;
+}
+
+/* =========================================
+   FILTERS
+========================================= */
+
+.monetra-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.monetra-filter input,
+.monetra-filter select {
+    padding: 11px 13px;
+    background: var(--surface);
+    color: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+}
+
+/* =========================================
+   EMPTY STATE
+========================================= */
+
+.monetra-empty {
+    padding: 35px 20px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px dashed #39393e;
+    border-radius: var(--radius);
+}
+
+.monetra-empty h3 {
+    color: var(--text);
+    margin-bottom: 7px;
+}
+
+/* =========================================
+   FOOTER / WATERMARK
+========================================= */
+
+.monetra-footer {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+    color: #555;
+    font-size: 10px;
+    letter-spacing: 3px;
+}
+
+/* =========================================
+   ERROR SCREEN
+========================================= */
+
+#monetra-startup-error {
+    display: none;
+    min-height: 100vh;
+    padding: 25px;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+}
+
+.error-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    text-align: center;
+}
+
+.error-card h2 {
+    color: var(--white);
+    margin-bottom: 12px;
+}
+
+.error-card p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.error-card button {
+    width: 100%;
+    padding: 13px;
+    margin-top: 18px;
+    background: var(--white);
+    color: #111;
+    border: 0;
+    border-radius: 9px;
+    font-weight: 700;
+}
+
+/* =========================================
+   SCROLLBAR
+========================================= */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 10px;
+}
+
+/* =========================================
+   RESPONSIVE MOBILE
+========================================= */
+
+@media (max-width: 768px) {
+
+    .monetra-container {
+        padding: 17px;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .monetra-page-title h1 {
+        font-size: 22px;
+    }
+
+    .monetra-auth-card {
+        padding: 27px 20px;
+    }
+
+    .card-value {
+        font-size: 19px;
+    }
+}
+
+@media (max-width: 480px) {
+
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .monetra-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .monetra-container {
+        padding: 14px;
+    }
+
+    .monetra-brand {
+        font-size: 19px;
+    }
+
+    .transaction-card {
+        align-items: flex-start;
+    }
+
+    .monetra-nav {
+        gap: 6px;
+    }
+
+    .monetra-nav button,
+    .monetra-nav a {
+        padding: 9px 11px;
+        font-size: 11px;
+    }
+}

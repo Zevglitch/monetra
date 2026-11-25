@@ -1,0 +1,300 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101010">
+    <meta name="description" content="Monetra - Personal Finance Management">
+
+    <title>Monetra</title>
+
+    <link rel="stylesheet" href="./css/style.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #101010;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        #app {
+            min-height: 100vh;
+        }
+
+        /* LOADING SCREEN */
+
+        #monetra-loading {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: #101010;
+            overflow: hidden;
+            padding: 20px;
+        }
+
+        .loading-content {
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .loading-logo {
+            font-size: 35px;
+            font-weight: 800;
+            letter-spacing: 7px;
+            color: #f5f5f5;
+            margin-left: 7px;
+            animation: logoFade 2s ease-in-out infinite;
+        }
+
+        .loading-subtitle {
+            margin-top: 12px;
+            color: #777;
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .loading-animation {
+            position: relative;
+            width: 42px;
+            height: 42px;
+            margin-top: 42px;
+        }
+
+        .loading-animation::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border: 2px solid #292929;
+            border-top-color: #eeeeee;
+            border-radius: 50%;
+            animation: monetraSpin 1s linear infinite;
+        }
+
+        .loading-animation::after {
+            content: "";
+            position: absolute;
+            inset: 9px;
+            border: 2px solid #333;
+            border-bottom-color: #888;
+            border-radius: 50%;
+            animation: monetraSpinReverse 1.5s linear infinite;
+        }
+
+        .loading-status {
+            margin-top: 22px;
+            font-size: 11px;
+            color: #777;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+
+        .loading-watermark {
+            position: absolute;
+            bottom: 30px;
+            font-size: 9px;
+            color: #505050;
+            letter-spacing: 5px;
+            margin-left: 5px;
+        }
+
+        @keyframes monetraSpin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes monetraSpinReverse {
+            to {
+                transform: rotate(-360deg);
+            }
+        }
+
+        @keyframes logoFade {
+            0%, 100% {
+                opacity: .65;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* ERROR SCREEN */
+
+        #monetra-startup-error {
+            display: none;
+            min-height: 100vh;
+            padding: 25px;
+            align-items: center;
+            justify-content: center;
+            background: #101010;
+        }
+
+        .error-card {
+            width: 100%;
+            max-width: 420px;
+            padding: 28px;
+            background: #1b1b1b;
+            border: 1px solid #333;
+            border-radius: 18px;
+            text-align: center;
+        }
+
+        .error-icon {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+
+        .error-card h2 {
+            font-size: 20px;
+            margin: 0 0 12px;
+        }
+
+        .error-card p {
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .error-card button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 18px;
+            border: none;
+            border-radius: 10px;
+            background: white;
+            color: #111;
+            font-weight: bold;
+        }
+
+        .error-watermark {
+            margin-top: 25px;
+            color: #666;
+            font-size: 10px;
+            letter-spacing: 3px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app"></div>
+
+    <!-- MONETRA LOADING -->
+    <div id="monetra-loading">
+
+        <div class="loading-content">
+
+            <div class="loading-logo">
+                MONETRA
+            </div>
+
+            <div class="loading-subtitle">
+                Personal Finance
+            </div>
+
+            <div class="loading-animation"></div>
+
+            <div class="loading-status" id="loading-status">
+                Preparing your experience...
+            </div>
+
+        </div>
+
+        <div class="loading-watermark">
+            ZETHER
+        </div>
+
+    </div>
+
+    <!-- ERROR SCREEN -->
+    <div id="monetra-startup-error">
+
+        <div class="error-card">
+
+            <div class="error-icon">⚠️</div>
+
+            <h2>Monetra belum dapat dibuka</h2>
+
+            <p id="monetra-error-message">
+                Aplikasi tidak berhasil dimulai.
+                Periksa koneksi internet dan file JavaScript.
+            </p>
+
+            <button onclick="window.location.reload()">
+                Coba Lagi
+            </button>
+
+            <div class="error-watermark">
+                ZETHER
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- STARTUP SYSTEM -->
+    <script>
+        window.__MONETRA_READY = false;
+        window.__MONETRA_ERROR = false;
+
+        window.__MONETRA_SHOW_ERROR = function(message) {
+            if (window.__MONETRA_READY) return;
+
+            window.__MONETRA_ERROR = true;
+
+            const loading = document.getElementById("monetra-loading");
+            const error = document.getElementById("monetra-startup-error");
+            const errorMessage = document.getElementById("monetra-error-message");
+
+            if (loading) loading.style.display = "none";
+            if (errorMessage) errorMessage.textContent = message;
+            if (error) error.style.display = "flex";
+        };
+
+        window.__MONETRA_SET_READY = function() {
+            window.__MONETRA_READY = true;
+            window.__MONETRA_ERROR = false;
+
+            const loading = document.getElementById("monetra-loading");
+
+            if (loading) {
+                loading.style.display = "none";
+            }
+
+            clearTimeout(window.__MONETRA_STARTUP_TIMER);
+        };
+
+        window.__MONETRA_STARTUP_TIMER = setTimeout(function() {
+            if (!window.__MONETRA_READY) {
+                window.__MONETRA_SHOW_ERROR(
+                    "Aplikasi tidak berhasil dimulai dalam 15 detik. Periksa koneksi internet atau file JavaScript."
+                );
+            }
+        }, 15000);
+
+        window.addEventListener("error", function(event) {
+            console.error("Monetra Error:", event.message);
+        });
+
+        window.addEventListener("unhandledrejection", function(event) {
+            console.error("Monetra Promise Error:", event.reason);
+        });
+    </script>
+
+    <script type="module" src="./js/app.js"></script>
+
+</body>
+</html>
