@@ -1,4 +1,9 @@
 
+/* =========================================
+   MONETRA
+   BUDGET MANAGEMENT SYSTEM
+========================================= */
+
 import {
     collection,
     addDoc,
@@ -13,24 +18,42 @@ import { db } from "./firebase.js";
 import { getTransactions } from "./transactions.js";
 import { formatRupiah } from "./finance.js";
 
-// ==========================================
-// MONETRA BUDGET SYSTEM
-// ==========================================
+
+/* =========================================
+   STATE
+========================================= */
 
 let selectedBudgetMonth = getCurrentMonth();
 let budgetItems = [];
 let budgetTransactions = [];
 let budgetBusy = false;
 let activeBudgetId = null;
+let budgetEventsInitialized = false;
 
-// ==========================================
-// 1. HELPER
-// ==========================================
+
+/* =========================================
+   DATE & FORMAT HELPERS
+========================================= */
 
 function getCurrentMonth() {
     const now = new Date();
 
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0")
+    ].join("-");
+}
+
+function formatMonth(month) {
+    if (!/^\d{4}-\d{2}$/.test(month)) return month;
+
+    const [year, monthNumber] = month.split("-").map(Number);
+
+    return new Date(year, monthNumber - 1, 1)
+        .toLocaleDateString("id-ID", {
+            month: "long",
+            year: "numeric"
+        });
 }
 
 function escapeHTML(value) {
@@ -43,24 +66,6 @@ function escapeHTML(value) {
     })[char]);
 }
 
-function getBudgetCollection(uid) {
-    return collection(db, "users", uid, "budgets");
-}
-
-function formatMonth(month) {
-    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
-        return "-";
-    }
-
-    const [year, number] = month.split("-");
-
-    return new Date(Number(year), Number(number) - 1, 1)
-        .toLocaleDateString("id-ID", {
-            month: "long",
-            year: "numeric"
-        });
-}
-
 function parseAmount(value) {
     const amount = Number(value);
 
@@ -69,322 +74,721 @@ function parseAmount(value) {
         : 0;
 }
 
-function getUsedAmount(category, month) {
-    const targetCategory = String(category || "").trim().toLowerCase();
+function normalizeType(type) {
+    const value = String(type || "").toLowerCase();
 
-    return budgetTransactions.reduce((total, transaction) => {
-        const type = String(transaction.type || "").toLowerCase();
-        const transactionCategory = String(transaction.category || "")
-            .trim()
-            .toLowerCase();
-
-        const date = String(transaction.date || "");
-
-        const isExpense = [
-            "expense",
-            "pengeluaran",
-            "keluar"
-        ].includes(type);
-
-        if (
-            isExpense &&
-            transactionCategory === targetCategory &&
-            date.startsWith(month)
-        ) {
-            return total + Number(transaction.amount || 0);
-        }
-
-        return total;
-    }, 0);
-}
-
-// ==========================================
-// 2. FIRESTORE
-// ==========================================
-
-async function getBudgets(uid) {
-    const snapshot = await getDocs(getBudgetCollection(uid));
-
-    return snapshot.docs.map(item => ({
-        id: item.id,
-        ...item.data()
-    }));
-}
-
-async function addBudget(uid, data) {
-    return addDoc(getBudgetCollection(uid), {
-        category: data.category,
-        amount: data.amount,
-        month: data.month,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-    });
-}
-
-async function updateBudget(uid, id, data) {
-    return updateDoc(
-        doc(db, "users", uid, "budgets", id),
-        {
-            category: data.category,
-            amount: data.amount,
-            month: data.month,
-            updatedAt: serverTimestamp()
-        }
-    );
-}
-
-async function deleteBudget(uid, id) {
-    return deleteDoc(
-        doc(db, "users", uid, "budgets", id)
-    );
-}
-
-// ==========================================
-// 3. MODAL SYSTEM
-// ==========================================
-
-function closeBudgetModal() {
-    const modal = document.getElementById("budget-modal");
-
-    if (modal) {
-        modal.classList.remove("show");
+    if (["income", "pemasukan", "masuk"].includes(value)) {
+        return "income";
     }
 
-    activeBudgetId = null;
+    return "expense";
 }
 
-function openEditModal(budget) {
-    const modal = document.getElementById("budget-modal");
+function getTransactionMonth(transaction) {
+    const date = String(transaction.date || "");
 
-    if (!modal) return;
-
-    activeBudgetId = budget.id;
-
-    document.getElementById("budget-modal-title").textContent =
-        "Edit Anggaran";
-
-    document.getElementById("budget-modal-description").textContent =
-        "Ubah kategori, batas nominal, atau bulan anggaran.";
-
-    document.getElementById("budget-edit-category").value =
-        budget.category || "";
-
-    document.getElementById("budget-edit-amount").value =
-        budget.amount || "";
-
-    document.getElementById("budget-edit-month").value =
-        budget.month || selectedBudgetMonth;
-
-    document.getElementById("budget-modal-submit").textContent =
-        "Simpan Perubahan";
-
-    modal.classList.add("show");
+    return date.length >= 7 ? date.slice(0, 7) : "";
 }
 
-function openDeleteModal(budget) {
-    const modal = document.getElementById("budget-delete-modal");
+function getBudgetCollection(uid) {
+    if (!uid) {
+        throw new Error("Pengguna belum login.");
+    }
 
-    if (!modal) return;
-
-    activeBudgetId = budget.id;
-
-    document.getElementById("budget-delete-name").textContent =
-        budget.category || "Anggaran ini";
-
-    modal.classList.add("show");
+    return collection(db, "users", uid, "budgets");
 }
 
-// ==========================================
-// 4. STYLE MODAL
-// ==========================================
+
+/* =========================================
+   FIRESTORE OPERATIONS
+========================================= */
+
+export async function getBudgets(uid) {
+    try {
+        const snapshot = await getDocs(getBudgetCollection(uid));
+
+        return snapshot.docs.map(item => ({
+            id: item.id,
+            ...item.data()
+        }));
+    } catch (error) {
+        console.error("Get budgets error:", error);
+        throw error;
+    }
+}
+
+
+export async function addBudget(uid, data) {
+    const category = String(data.category || "").trim();
+    const amount = parseAmount(data.amount);
+    const month = String(data.month || "");
+
+    if (!category) {
+        throw new Error("Kategori anggaran wajib diisi.");
+    }
+
+    if (!amount) {
+        throw new Error("Nominal anggaran harus lebih dari nol.");
+    }
+
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+        throw new Error("Bulan anggaran tidak valid.");
+    }
+
+    try {
+        const existing = await getBudgets(uid);
+
+        const duplicate = existing.some(item =>
+            item.month === month &&
+            String(item.category || "").toLowerCase() === category.toLowerCase()
+        );
+
+        if (duplicate) {
+            throw new Error("Anggaran untuk kategori ini sudah tersedia pada bulan tersebut.");
+        }
+
+        const reference = await addDoc(getBudgetCollection(uid), {
+            category,
+            amount,
+            month,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+
+        return {
+            success: true,
+            id: reference.id
+        };
+    } catch (error) {
+        console.error("Add budget error:", error);
+        throw error;
+    }
+}
+
+
+export async function updateBudget(uid, budgetId, data) {
+    if (!uid || !budgetId) {
+        throw new Error("Data anggaran tidak valid.");
+    }
+
+    const category = String(data.category || "").trim();
+    const amount = parseAmount(data.amount);
+    const month = String(data.month || "");
+
+    if (!category || !amount || !/^\d{4}-\d{2}$/.test(month)) {
+        throw new Error("Mohon periksa kembali data anggaran.");
+    }
+
+    try {
+        const existing = await getBudgets(uid);
+
+        const duplicate = existing.some(item =>
+            item.id !== budgetId &&
+            item.month === month &&
+            String(item.category || "").toLowerCase() === category.toLowerCase()
+        );
+
+        if (duplicate) {
+            throw new Error("Kategori anggaran tersebut sudah tersedia pada bulan ini.");
+        }
+
+        await updateDoc(
+            doc(db, "users", uid, "budgets", budgetId),
+            {
+                category,
+                amount,
+                month,
+                updatedAt: serverTimestamp()
+            }
+        );
+
+        return { success: true };
+    } catch (error) {
+        console.error("Update budget error:", error);
+        throw error;
+    }
+}
+
+
+export async function deleteBudget(uid, budgetId) {
+    if (!uid || !budgetId) {
+        throw new Error("Data anggaran tidak valid.");
+    }
+
+    try {
+        await deleteDoc(
+            doc(db, "users", uid, "budgets", budgetId)
+        );
+
+        return { success: true };
+    } catch (error) {
+        console.error("Delete budget error:", error);
+        throw error;
+    }
+}
+
+
+/* =========================================
+   BUDGET CALCULATIONS
+========================================= */
+
+function getUsedAmount(category, month) {
+    return budgetTransactions
+        .filter(transaction => {
+            const sameCategory =
+                String(transaction.category || "").toLowerCase() ===
+                String(category || "").toLowerCase();
+
+            return (
+                sameCategory &&
+                getTransactionMonth(transaction) === month &&
+                normalizeType(transaction.type) === "expense"
+            );
+        })
+        .reduce((total, transaction) => {
+            return total + Number(transaction.amount || 0);
+        }, 0);
+}
+
+
+function getBudgetStatus(used, limit) {
+    if (used > limit) {
+        return {
+            label: "Melebihi anggaran",
+            className: "danger",
+            color: "#ef4444"
+        };
+    }
+
+    if (used >= limit * 0.8) {
+        return {
+            label: "Hampir mencapai batas",
+            className: "warning",
+            color: "#f59e0b"
+        };
+    }
+
+    return {
+        label: "Masih aman",
+        className: "success",
+        color: "#22c55e"
+    };
+}
+
+
+function calculateBudgetSummary(items) {
+    let totalLimit = 0;
+    let totalUsed = 0;
+
+    items.forEach(item => {
+        const limit = Number(item.amount || 0);
+        const used = getUsedAmount(item.category, item.month);
+
+        totalLimit += limit;
+        totalUsed += used;
+    });
+
+    return {
+        totalLimit,
+        totalUsed,
+        remaining: totalLimit - totalUsed,
+        percentage: totalLimit > 0
+            ? (totalUsed / totalLimit) * 100
+            : 0
+    };
+}
+
+
+/* =========================================
+   NOTIFICATION
+========================================= */
+
+function showBudgetMessage(message, type = "info") {
+    const oldMessage = document.getElementById("budget-toast");
+
+    if (oldMessage) oldMessage.remove();
+
+    const toast = document.createElement("div");
+
+    toast.id = "budget-toast";
+    toast.className = `budget-toast ${type}`;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+
+/* =========================================
+   STYLES
+========================================= */
+
+function renderBudgetStyles() {
+    if (document.getElementById("monetra-budget-styles")) return;
+
+    const style = document.createElement("style");
+
+    style.id = "monetra-budget-styles";
+
+    style.textContent = `
+        .budget-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+        }
+
+        .budget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .budget-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .budget-header p {
+            color: var(--text-secondary, #999);
+            margin: 6px 0 0;
+        }
+
+        .budget-month {
+            width: 100%;
+            max-width: 190px;
+            padding: 11px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color, #444);
+            background: var(--card-bg, #222);
+            color: var(--text-primary, #fff);
+        }
+
+        .budget-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .budget-summary-card {
+            background: var(--card-bg, #222);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 15px;
+            padding: 17px;
+            min-width: 0;
+        }
+
+        .budget-summary-card span {
+            display: block;
+            color: var(--text-secondary, #aaa);
+            font-size: 12px;
+            margin-bottom: 9px;
+        }
+
+        .budget-summary-card strong {
+            font-size: clamp(14px, 2vw, 20px);
+            overflow-wrap: anywhere;
+        }
+
+        .budget-panel {
+            background: var(--card-bg, #222);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .budget-panel h3 {
+            margin: 0 0 17px;
+            font-size: 17px;
+        }
+
+        .budget-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 12px;
+        }
+
+        .budget-form input,
+        .budget-modal input,
+        .budget-modal select {
+            width: 100%;
+            min-width: 0;
+            padding: 12px;
+            border: 1px solid var(--border-color, #444);
+            border-radius: 10px;
+            background: var(--input-bg, #181818);
+            color: var(--text-primary, #fff);
+            outline: none;
+        }
+
+        .budget-form input:focus,
+        .budget-modal input:focus {
+            border-color: var(--accent-color, #888);
+        }
+
+        .budget-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 11px 16px;
+            background: var(--accent-color, #e5e5e5);
+            color: var(--button-text, #111);
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .budget-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+        .budget-list {
+            display: flex;
+            flex-direction: column;
+            gap: 13px;
+        }
+
+        .budget-item {
+            padding: 17px;
+            border: 1px solid var(--border-color, #333);
+            border-radius: 14px;
+            background: var(--card-bg, #222);
+        }
+
+        .budget-item-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .budget-item h4 {
+            margin: 0 0 7px;
+            font-size: 16px;
+        }
+
+        .budget-item small {
+            color: var(--text-secondary, #aaa);
+        }
+
+        .budget-amount {
+            text-align: right;
+            overflow-wrap: anywhere;
+        }
+
+        .budget-amount strong {
+            display: block;
+            font-size: 15px;
+        }
+
+        .budget-amount small {
+            display: block;
+            margin-top: 5px;
+        }
+
+        .budget-progress {
+            height: 9px;
+            background: var(--border-color, #444);
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 16px 0 9px;
+        }
+
+        .budget-progress-fill {
+            height: 100%;
+            border-radius: 20px;
+            transition: width .3s ease;
+        }
+
+        .budget-progress-info {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            color: var(--text-secondary, #aaa);
+            font-size: 12px;
+        }
+
+        .budget-status {
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .budget-status.success { color: #22c55e; }
+        .budget-status.warning { color: #f59e0b; }
+        .budget-status.danger { color: #ef4444; }
+
+        .budget-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .budget-action {
+            border: 1px solid var(--border-color, #444);
+            color: var(--text-primary, #fff);
+            background: transparent;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .budget-action.delete {
+            color: #ef4444;
+        }
+
+        .budget-empty {
+            padding: 30px 15px;
+            text-align: center;
+            color: var(--text-secondary, #aaa);
+            border: 1px dashed var(--border-color, #444);
+            border-radius: 12px;
+        }
+
+        .budget-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(0,0,0,.72);
+        }
+
+        .budget-modal.active {
+            display: flex;
+        }
+
+        .budget-modal-content {
+            width: 100%;
+            max-width: 420px;
+            padding: 22px;
+            border-radius: 17px;
+            background: var(--card-bg, #222);
+            border: 1px solid var(--border-color, #444);
+        }
+
+        .budget-modal-content h3 {
+            margin: 0 0 18px;
+        }
+
+        .budget-modal-content form {
+            display: flex;
+            flex-direction: column;
+            gap: 13px;
+        }
+
+        .budget-modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 7px;
+        }
+
+        .budget-modal-actions button {
+            flex: 1;
+        }
+
+        .budget-toast {
+            position: fixed;
+            z-index: 10001;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 13px 18px;
+            max-width: calc(100% - 32px);
+            border-radius: 10px;
+            background: #333;
+            color: #fff;
+            box-shadow: 0 8px 25px rgba(0,0,0,.3);
+            font-size: 14px;
+        }
+
+        .budget-toast.error { background: #991b1b; }
+        .budget-toast.success { background: #166534; }
+
+        @media (max-width: 650px) {
+            .budget-summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .budget-form {
+                grid-template-columns: 1fr;
+            }
+
+            .budget-form .budget-btn {
+                width: 100%;
+            }
+
+            .budget-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .budget-month {
+                max-width: none;
+            }
+
+            .budget-panel {
+                padding: 15px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .budget-item-top {
+                flex-direction: column;
+            }
+
+            .budget-amount {
+                text-align: left;
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+}
+
+
+/* =========================================
+   MODALS
+========================================= */
 
 function renderBudgetModals() {
     return `
-        <style>
-            .budget-modal-overlay {
-                position: fixed;
-                inset: 0;
-                z-index: 10000;
-                display: none;
-                align-items: center;
-                justify-content: center;
-                padding: 18px;
-                background: rgba(0,0,0,.78);
-                backdrop-filter: blur(5px);
-            }
+        <div class="budget-modal" id="budget-edit-modal">
+            <div class="budget-modal-content">
+                <h3>Edit Anggaran</h3>
 
-            .budget-modal-overlay.show {
-                display: flex;
-            }
+                <form id="budget-edit-form">
+                    <input
+                        type="text"
+                        id="budget-edit-category"
+                        placeholder="Nama kategori"
+                        maxlength="60"
+                        required
+                    >
 
-            .budget-modal-box {
-                width: 100%;
-                max-width: 420px;
-                padding: 24px;
-                background: #19191c;
-                border: 1px solid #35353a;
-                border-radius: 18px;
-                box-shadow: 0 20px 60px rgba(0,0,0,.5);
-                animation: budgetModalIn .2s ease;
-            }
+                    <input
+                        type="number"
+                        id="budget-edit-amount"
+                        placeholder="Nominal anggaran"
+                        min="1"
+                        step="1"
+                        required
+                    >
 
-            @keyframes budgetModalIn {
-                from {
-                    opacity: 0;
-                    transform: translateY(12px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
+                    <input
+                        type="month"
+                        id="budget-edit-month"
+                        required
+                    >
 
-            .budget-modal-header {
-                display: flex;
-                align-items: flex-start;
-                justify-content: space-between;
-                gap: 12px;
-                margin-bottom: 22px;
-            }
+                    <div class="budget-modal-actions">
+                        <button type="button"
+                            class="budget-action"
+                            id="budget-edit-cancel">
+                            Batal
+                        </button>
 
-            .budget-modal-header h3 {
-                color: #f5f5f5;
-                font-size: 19px;
-                margin: 0 0 5px;
-            }
+                        <button type="submit" class="budget-btn">
+                            Simpan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
-            .budget-modal-header p {
-                color: #85858c;
-                font-size: 12px;
-                line-height: 1.5;
-            }
+        <div class="budget-modal" id="budget-delete-modal">
+            <div class="budget-modal-content">
+                <h3>Hapus Anggaran?</h3>
 
-            .budget-modal-close {
-                width: 34px;
-                height: 34px;
-                flex-shrink: 0;
-                border: 1px solid #38383d;
-                border-radius: 9px;
-                background: #242428;
-                color: #ddd;
-                font-size: 19px;
-            }
+                <p style="color:var(--text-secondary,#aaa)">
+                    Anggaran ini akan dihapus secara permanen.
+                    Transaksi yang sudah tercatat tidak akan ikut terhapus.
+                </p>
 
-            .budget-modal-field {
-                margin-bottom: 16px;
-            }
+                <div class="budget-modal-actions">
+                    <button type="button"
+                        class="budget-action"
+                        id="budget-delete-cancel">
+                        Batal
+                    </button>
 
-            .budget-modal-field label {
-                display: block;
-                margin-bottom: 7px;
-                color: #c5c5c8;
-                font-size: 12px;
-            }
+                    <button type="button"
+                        class="budget-btn"
+                        id="budget-delete-confirm"
+                        style="background:#dc2626;color:white">
+                        Ya, Hapus
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
 
-            .budget-modal-field input {
-                width: 100%;
-                padding: 13px;
-                border: 1px solid #38383d;
-                border-radius: 10px;
-                background: #101012;
-                color: white;
-                outline: none;
-                font-size: 14px;
-            }
 
-            .budget-modal-field input:focus {
-                border-color: #999;
-            }
+/* =========================================
+   PAGE RENDERING
+========================================= */
 
-            .budget-modal-actions {
-                display: flex;
-                gap: 10px;
-                margin-top: 22px;
-            }
+export async function renderBudgetsPage(uid) {
+    const container = document.getElementById("monetra-page-content");
 
-            .budget-modal-actions button {
-                flex: 1;
-                min-height: 44px;
-                border-radius: 10px;
-                font-size: 13px;
-                font-weight: 700;
-            }
+    if (!container) {
+        console.error("Monetra: budget container tidak ditemukan.");
+        return;
+    }
 
-            .budget-modal-cancel {
-                background: #29292d;
-                border: 1px solid #414146;
-                color: #ddd;
-            }
+    if (!uid) {
+        container.innerHTML = `
+            <div class="budget-empty">
+                Silakan login untuk melihat anggaran.
+            </div>
+        `;
+        return;
+    }
 
-            .budget-modal-save {
-                background: #f0f0f0;
-                border: 0;
-                color: #111;
-            }
+    renderBudgetStyles();
 
-            .budget-delete-icon {
-                width: 52px;
-                height: 52px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-bottom: 17px;
-                border-radius: 15px;
-                background: #382222;
-                color: #efaaaa;
-                font-size: 23px;
-            }
+    container.innerHTML = `
+        <div class="budget-wrapper">
 
-            .budget-delete-warning {
-                margin-top: 10px;
-                padding: 12px;
-                border-radius: 9px;
-                background: #242124;
-                color: #b8aeb0;
-                font-size: 11px;
-                line-height: 1.6;
-            }
+            <div class="budget-header">
+                <div>
+                    <h2>Anggaran</h2>
+                    <p>Atur batas pengeluaran bulananmu.</p>
+                </div>
 
-            .budget-action-group {
-                display: flex;
-                gap: 7px;
-                flex-shrink: 0;
-            }
+                <input
+                    type="month"
+                    id="budget-month-filter"
+                    class="budget-month"
+                    value="${escapeHTML(selectedBudgetMonth)}"
+                >
+            </div>
 
-            .budget-action-btn {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 6px;
-                min-height: 34px;
-                padding: 7px 11px;
-                border-radius: 8px;
-                font-size: 11px;
-                font-weight: 600;
-                transition: .2s ease;
-            }
+            <div class="budget-summary-grid">
+                <div class="budget-summary-card">
+                    <span>Total Anggaran</span>
+                    <strong id="budget-total-limit">Rp0</strong>
+                </div>
 
-            .budget-edit-btn {
-                color: #dedee0;
-                background: #29292e;
-                border: 1px solid #45454b;
-            }
+                <div class="budget-summary-card">
+                    <span>Total Terpakai</span>
+                    <strong id="budget-total-used">Rp0</strong>
+                </div>
 
-            .budget-edit-btn:hover {
-                background: #38383e;
-            }
+                <div class="budget-summary-card">
+                    <span>Sisa Anggaran</span>
+                    <strong id="budget-remaining">Rp0</strong>
+                </div>
+            </div>
 
-            .budget-delete-btn {
-                color: #e5aaaa;
-                background: #302020;
-                border: 1px solid #583737;
-            }
-
-            .budget-delete-btn:hover {
-                background: #452929;
-            }
-
-            .budget-action-btn:active {
+            <dn:active {
                 transform: scale(.96);
             }
 
