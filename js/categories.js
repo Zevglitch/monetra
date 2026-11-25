@@ -1,4 +1,9 @@
 
+/* =========================================
+   MONETRA
+   CATEGORY MANAGEMENT SYSTEM
+========================================= */
+
 import {
     collection,
     addDoc,
@@ -13,9 +18,10 @@ import {
 
 import { db } from "./firebase.js";
 
-// ==========================================
-// KONFIGURASI
-// ==========================================
+
+/* =========================================
+   DEFAULT CATEGORIES
+========================================= */
 
 const defaultCategories = [
     { name: "Gaji", type: "income" },
@@ -35,17 +41,49 @@ const defaultCategories = [
     { name: "Lainnya", type: "expense" }
 ];
 
+
+/* =========================================
+   STATE
+========================================= */
+
+let categoryEventsController = null;
+let categoryBusy = false;
+
+
+/* =========================================
+   FIRESTORE REFERENCES
+========================================= */
+
 function categoryCollection(uid) {
+    if (!uid) {
+        throw new Error("User ID tidak ditemukan.");
+    }
+
     return collection(db, "users", uid, "categories");
 }
 
 function categoryDocument(uid, id) {
+    if (!uid || !id) {
+        throw new Error("Data kategori tidak lengkap.");
+    }
+
     return doc(db, "users", uid, "categories", id);
 }
 
-// ==========================================
-// HELPER
-// ==========================================
+function categorySettingsDocument(uid) {
+    return doc(
+        db,
+        "users",
+        uid,
+        "settings",
+        "categoryDefaults"
+    );
+}
+
+
+/* =========================================
+   HELPERS
+========================================= */
 
 function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -58,9 +96,27 @@ function escapeHTML(value) {
 }
 
 function normalizeType(type) {
-    return ["income", "pemasukan", "masuk"].includes(
-        String(type).toLowerCase()
-    ) ? "income" : "expense";
+    const value = String(type || "").toLowerCase();
+
+    if (["income", "pemasukan", "masuk"].includes(value)) {
+        return "income";
+    }
+
+    return "expense";
+}
+
+function validateCategoryName(name) {
+    const cleanName = String(name || "").trim();
+
+    if (!cleanName) {
+        throw new Error("Nama kategori wajib diisi.");
+    }
+
+    if (cleanName.length > 40) {
+        throw new Error("Nama kategori maksimal 40 karakter.");
+    }
+
+    return cleanName;
 }
 
 function showCategoryMessage(message, type = "error") {
@@ -69,25 +125,37 @@ function showCategoryMessage(message, type = "error") {
     if (!element) return;
 
     element.textContent = message;
+    element.className = `category-message ${type}`;
     element.style.display = "block";
-    element.style.color = type === "success" ? "#a5d6b0" : "#ff9999";
 }
 
-// ==========================================
-// 2. KATEGORI DEFAULT
-// ==========================================
+function showCategoryToast(message, type = "success") {
+    document.getElementById("category-toast")?.remove();
+
+    const toast = document.createElement("div");
+
+    toast.id = "category-toast";
+    toast.className = `category-toast ${type}`;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+
+/* =========================================
+   1. INITIALIZE DEFAULT CATEGORIES
+========================================= */
 
 export async function ensureDefaultCategories(uid) {
-    if (!uid) throw new Error("User ID tidak ditemukan.");
+    if (!uid) {
+        throw new Error("User ID tidak ditemukan.");
+    }
 
-    const settingsRef = doc(
-        db,
-        "users",
-        uid,
-        "settings",
-        "categoryDefaults"
-    );
-
+    const settingsRef = categorySettingsDocument(uid);
     const settingsSnapshot = await getDoc(settingsRef);
 
     if (settingsSnapshot.exists()) {
@@ -96,8 +164,8 @@ export async function ensureDefaultCategories(uid) {
 
     const existing = await getDocs(categoryCollection(uid));
 
-    // Jangan menambahkan kategori bawaan jika kategori
-    // pengguna sudah tersedia.
+    // Jangan menambahkan kategori bawaan jika pengguna
+    // sudah mempunyai kategori sendiri.
     if (existing.empty) {
         for (const category of defaultCategories) {
             await addDoc(categoryCollection(uid), {
@@ -115,24 +183,46 @@ export async function ensureDefaultCategories(uid) {
     });
 }
 
-// ==========================================
-// 3. AMBIL SEMUA KATEGORI
-// ==========================================
+
+/* =========================================
+   2. GET ALL CATEGORIES
+========================================= */
 
 export async function getCategories(uid) {
     if (!uid) return [];
 
     const snapshot = await getDocs(categoryCollection(uid));
 
-    return snapshot.docs.map(document => ({
-        id: document.id,
-        ...document.data()
+    return snapshot.docs.map(item => ({
+        id: item.id,
+        ...item.data()
     }));
 }
 
-// ==========================================
-// 4. AMBIL KATEGORI BERDASARKAN TIPE
-// ==========================================
+
+/* =========================================
+   3. GET CATEGORY BY ID
+========================================= */
+
+export async function getCategoryById(uid, id) {
+    if (!uid || !id) return null;
+
+    const snapshot = await getDoc(categoryDocument(uid, id));
+
+    if (!snapshot.exists()) {
+        return null;
+    }
+
+    return {
+        id: snapshot.id,
+        ...snapshot.data()
+    };
+}
+
+
+/* =========================================
+   4. GET CATEGORIES BY TYPE
+========================================= */
 
 export async function getCategoriesByType(uid, type) {
     const categories = await getCategories(uid);
@@ -143,29 +233,24 @@ export async function getCategoriesByType(uid, type) {
     );
 }
 
-// ==========================================
-// 5. TAMBAH KATEGORI
-// ==========================================
+
+/* =========================================
+   5. ADD CATEGORY
+========================================= */
 
 export async function addCategory(uid, name, type) {
-    if (!uid) throw new Error("User ID tidak ditemukan.");
-
-    const cleanName = String(name || "").trim();
-
-    if (!cleanName) {
-        throw new Error("Nama kategori wajib diisi.");
+    if (!uid) {
+        throw new Error("User ID tidak ditemukan.");
     }
 
-    if (cleanName.length > 40) {
-        throw new Error("Nama kategori maksimal 40 karakter.");
-    }
-
+    const cleanName = validateCategoryName(name);
     const selectedType = normalizeType(type);
 
     const categories = await getCategories(uid);
 
     const duplicate = categories.some(category =>
-        category.name?.toLowerCase() === cleanName.toLowerCase() &&
+        String(category.name || "").toLowerCase() ===
+            cleanName.toLowerCase() &&
         normalizeType(category.type) === selectedType
     );
 
@@ -183,48 +268,46 @@ export async function addCategory(uid, name, type) {
     return result.id;
 }
 
-// ==========================================
-// 6. EDIT KATEGORI
-// ==========================================
+
+/* =========================================
+   6. UPDATE CATEGORY
+========================================= */
 
 export async function updateCategory(uid, id, updates) {
     if (!uid || !id) {
         throw new Error("Data kategori tidak lengkap.");
     }
 
-    const newName = typeof updates === "string"
-        ? updates.trim()
-        : String(updates.name || "").trim();
+    const newName = validateCategoryName(
+        typeof updates === "string"
+            ? updates
+            : updates?.name
+    );
 
-    if (!newName) {
-        throw new Error("Nama kategori tidak boleh kosong.");
-    }
+    const categoryRef = categoryDocument(uid, id);
+    const categorySnapshot = await getDoc(categoryRef);
 
-    if (newName.length > 40) {
-        throw new Error("Nama kategori maksimal 40 karakter.");
-    }
-
-    const existingCategory = await getDoc(categoryDocument(uid, id));
-
-    if (!existingCategory.exists()) {
+    if (!categorySnapshot.exists()) {
         throw new Error("Kategori tidak ditemukan.");
     }
 
-    const oldData = existingCategory.data();
+    const oldData = categorySnapshot.data();
 
     const categories = await getCategories(uid);
 
     const duplicate = categories.some(category =>
         category.id !== id &&
-        category.name?.toLowerCase() === newName.toLowerCase() &&
-        normalizeType(category.type) === normalizeType(oldData.type)
+        String(category.name || "").toLowerCase() ===
+            newName.toLowerCase() &&
+        normalizeType(category.type) ===
+            normalizeType(oldData.type)
     );
 
     if (duplicate) {
         throw new Error("Nama kategori sudah digunakan.");
     }
 
-    await updateDoc(categoryDocument(uid, id), {
+    await updateDoc(categoryRef, {
         name: newName,
         updatedAt: serverTimestamp()
     });
@@ -232,23 +315,496 @@ export async function updateCategory(uid, id, updates) {
     return true;
 }
 
-// ==========================================
-// 7. HAPUS KATEGORI
-// ==========================================
+
+/* =========================================
+   7. DELETE CATEGORY
+========================================= */
 
 export async function deleteCategory(uid, id) {
     if (!uid || !id) {
         throw new Error("Data kategori tidak lengkap.");
     }
 
-    await deleteDoc(categoryDocument(uid, id));
+    const categoryRef = categoryDocument(uid, id);
+    const snapshot = await getDoc(categoryRef);
+
+    if (!snapshot.exists()) {
+        throw new Error("Kategori tidak ditemukan.");
+    }
+
+    await deleteDoc(categoryRef);
 
     return true;
 }
 
-// ==========================================
-// 8. TAMPILAN HALAMAN KATEGORI
-// ==========================================
+
+/* =========================================
+   8. CATEGORY PAGE STYLES
+========================================= */
+
+function renderCategoryStyles() {
+    if (document.getElementById("monetra-category-styles")) {
+        return;
+    }
+
+    const style = document.createElement("style");
+
+    style.id = "monetra-category-styles";
+
+    style.textContent = `
+        .category-page {
+            width: 100%;
+            color: #dedee0;
+        }
+
+        .category-heading {
+            margin-bottom: 22px;
+        }
+
+        .category-heading h2 {
+            color: #fff;
+            font-size: 23px;
+            margin: 0 0 6px;
+        }
+
+        .category-heading p {
+            color: #85858c;
+            font-size: 13px;
+            margin: 0;
+        }
+
+        .category-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .category-summary-card {
+            padding: 17px;
+            background: #141416;
+            border: 1px solid #2b2b30;
+            border-radius: 13px;
+            min-width: 0;
+        }
+
+        .category-summary-card span {
+            display: block;
+            color: #85858c;
+            font-size: 11px;
+            margin-bottom: 8px;
+        }
+
+        .category-summary-card strong {
+            display: block;
+            font-size: 23px;
+            color: #fff;
+        }
+
+        .category-form-card {
+            padding: 20px;
+            background: #141416;
+            border: 1px solid #2b2b30;
+            border-radius: 14px;
+            margin-bottom: 22px;
+        }
+
+        .category-form-card h3 {
+            color: #fff;
+            font-size: 16px;
+            margin: 0 0 17px;
+        }
+
+        .category-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .category-field label {
+            display: block;
+            color: #aaa;
+            font-size: 12px;
+            margin-bottom: 7px;
+        }
+
+        .category-field input,
+        .category-field select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px;
+            background: #101012;
+            border: 1px solid #333;
+            border-radius: 9px;
+            color: #fff;
+            outline: none;
+        }
+
+        .category-field input:focus,
+        .category-field select:focus {
+            border-color: #888;
+        }
+
+        .category-form-actions {
+            display: flex;
+            gap: 9px;
+            margin-top: 17px;
+        }
+
+        .category-form-actions button {
+            padding: 11px 16px;
+            border: none;
+            border-radius: 9px;
+            background: #eee;
+            color: #111;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .category-form-actions button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .category-form-actions #category-cancel {
+            background: #303035;
+            color: #fff;
+        }
+
+        .category-message {
+            margin-top: 12px;
+            font-size: 12px;
+        }
+
+        .category-message.error {
+            color: #ff9999;
+        }
+
+        .category-message.success {
+            color: #a5d6b0;
+        }
+
+        .category-lists {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .category-list-section {
+            padding: 18px;
+            background: #141416;
+            border: 1px solid #2b2b30;
+            border-radius: 14px;
+            min-width: 0;
+        }
+
+        .category-list-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .category-list-heading h3 {
+            color: #fff;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .category-list-heading span {
+            color: #85858c;
+            font-size: 10px;
+        }
+
+        .category-list {
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 12px;
+            background: #1c1c20;
+            border: 1px solid #303035;
+            border-radius: 9px;
+        }
+
+        .category-item-name {
+            color: #eee;
+            font-size: 13px;
+            overflow-wrap: anywhere;
+        }
+
+        .category-item-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .category-item-actions button {
+            padding: 7px 9px;
+            border: 1px solid #444;
+            border-radius: 7px;
+            background: #29292d;
+            color: #ddd;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .category-item-actions button:hover {
+            background: #3a3a40;
+        }
+
+        .category-item-actions .category-delete {
+            color: #ff9999;
+        }
+
+        .category-empty,
+        .category-loading {
+            padding: 20px 5px;
+            color: #777;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .category-toast {
+            position: fixed;
+            z-index: 10000;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 13px 18px;
+            border-radius: 10px;
+            background: #166534;
+            color: #fff;
+            box-shadow: 0 8px 25px rgba(0,0,0,.3);
+            font-size: 13px;
+            max-width: calc(100% - 32px);
+        }
+
+        .category-toast.error {
+            background: #991b1b;
+        }
+
+        .category-confirm {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(0,0,0,.75);
+        }
+
+        .category-confirm.active {
+            display: flex;
+        }
+
+        .category-confirm-box {
+            width: 100%;
+            max-width: 370px;
+            padding: 22px;
+            background: #19191d;
+            border: 1px solid #38383e;
+            border-radius: 15px;
+        }
+
+        .category-confirm-box h3 {
+            margin: 0 0 10px;
+            color: #fff;
+        }
+
+        .category-confirm-box p {
+            color: #999;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .category-confirm-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .category-confirm-actions button {
+            flex: 1;
+            padding: 11px;
+            border: 0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        #category-delete-cancel {
+            background: #303035;
+            color: #fff;
+        }
+
+        #category-delete-confirm {
+            background: #dc2626;
+            color: #fff;
+        }
+
+        @media(max-width:650px) {
+            .category-lists {
+                grid-template-columns: 1fr;
+            }
+
+            .category-summary {
+                gap: 8px;
+            }
+
+            .category-summary-card {
+                padding: 12px;
+            }
+
+            .category-summary-card strong {
+                font-size: 19px;
+            }
+        }
+
+        @media(max-width:400px) {
+            .category-form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .category-summary-card span {
+                font-size: 10px;
+            }
+
+            .category-item {
+                align-items: flex-start;
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+}
+
+
+/* =========================================
+   9. CATEGORY LIST RENDERING
+========================================= */
+
+async function loadCategoryLists(uid) {
+    const categories = await getCategories(uid);
+
+    const incomeCategories = categories.filter(category =>
+        normalizeType(category.type) === "income"
+    );
+
+    const expenseCategories = categories.filter(category =>
+        normalizeType(category.type) === "expense"
+    );
+
+    const incomeList = document.getElementById("income-category-list");
+    const expenseList = document.getElementById("expense-category-list");
+
+    const total = document.getElementById("category-total");
+    const incomeTotal = document.getElementById("category-income-total");
+    const expenseTotal = document.getElementById("category-expense-total");
+
+    const incomeCount = document.getElementById("income-count");
+    const expenseCount = document.getElementById("expense-count");
+
+    if (total) total.textContent = categories.length;
+    if (incomeTotal) incomeTotal.textContent = incomeCategories.length;
+    if (expenseTotal) expenseTotal.textContent = expenseCategories.length;
+
+    if (incomeCount) {
+        incomeCount.textContent = `${incomeCategories.length} kategori`;
+    }
+
+    if (expenseCount) {
+        expenseCount.textContent = `${expenseCategories.length} kategori`;
+    }
+
+    renderCategoryList(incomeList, incomeCategories);
+    renderCategoryList(expenseList, expenseCategories);
+}
+
+
+function renderCategoryList(container, categories) {
+    if (!container) return;
+
+    if (!categories.length) {
+        container.innerHTML = `
+            <div class="category-empty">
+                Belum ada kategori.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = categories.map(category => `
+        <div class="category-item">
+            <span class="category-item-name">
+                ${escapeHTML(category.name)}
+            </span>
+
+            <div class="category-item-actions">
+                <button
+                    type="button"
+                    data-category-edit="${escapeHTML(category.id)}">
+                    Edit
+                </button>
+
+                <button
+                    type="button"
+                    class="category-delete"
+                    data-category-delete="${escapeHTML(category.id)}">
+                    Hapus
+                </button>
+            </div>
+        </div>
+    `).join("");
+}
+
+
+/* =========================================
+   10. CATEGORY CONFIRMATION
+========================================= */
+
+function renderCategoryConfirmation() {
+    return `
+        <div class="category-confirm" id="category-confirm">
+            <div class="category-confirm-box">
+                <h3>Hapus Kategori?</h3>
+
+                <p>
+                    Kategori ini akan dihapus dari daftar.
+                    Transaksi lama yang menggunakan kategori ini
+                    tidak akan ikut terhapus.
+                </p>
+
+                <div class="category-confirm-actions">
+                    <button
+                        type="button"
+                        id="category-delete-cancel">
+                        Batal
+                    </button>
+
+                    <button
+                        type="button"
+                        id="category-delete-confirm">
+                        Ya, Hapus
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+
+/* =========================================
+   11. CATEGORY PAGE
+========================================= */
 
 export async function renderCategoriesPage(uid) {
     const content =
@@ -256,104 +812,10 @@ export async function renderCategoriesPage(uid) {
         document.getElementById("page-content");
 
     if (!content) {
-        console.error("Container halaman kategori tidak ditemukan.");
+        console.error("Monetra: container kategori tidak ditemukan.");
         return;
     }
-
-    content.innerHTML = `
-        <div class="category-page">
-
-            <div class="category-heading">
-                <div>
-                    <h2>Manajemen Kategori</h2>
-                    <p>Atur kategori pemasukan dan pengeluaranmu.</p>
-                </div>
-            </div>
-
-            <div class="category-summary">
-                <div class="category-summary-card">
-                    <span>Total Kategori</span>
-                    <strong id="category-total">0</strong>
-                </div>
-
-                <div class="category-summary-card">
-                    <span>Pemasukan</span>
-                    <strong id="category-income-total">0</strong>
-                </div>
-
-                <div class="category-summary-card">
-                    <span>Pengeluaran</span>
-                    <strong id="category-expense-total">0</strong>
-                </div>
-            </div>
-
-            <div class="category-form-card">
-                <h3 id="category-form-title">Tambah Kategori</h3>
-
-                <form id="category-form">
-
-                    <div class="category-form-grid">
-
-                        <div class="category-field">
-                            <label for="category-name">
-                                Nama Kategori
-                            </label>
-
-                            <input
-                                type="text"
-                                id="category-name"
-                                placeholder="Contoh: Internet"
-                                maxlength="40"
-                                required
-                            >
-                        </div>
-
-                        <div class="category-field">
-                            <label for="category-type">
-                                Jenis Kategori
-                            </label>
-
-                            <select id="category-type" required>
-                                <option value="expense">Pengeluaran</option>
-                                <option value="income">Pemasukan</option>
-                            </select>
-                        </div>
-
-                    </div>
-
-                    <div id="category-message"
-                         class="category-message"
-                         style="display:none;">
-                    </div>
-
-                    <div class="category-form-actions">
-
-                        <button type="submit" id="category-submit">
-                            + Tambah Kategori
-                        </button>
-
-                        <button
-                            type="button"
-                            id="category-cancel"
-                            style="display:none;"
-                        >
-                            Batal
-                        </button>
-
-                    </div>
-
-                </form>
-            </div>
-
-            <div class="category-lists">
-
-                <section class="category-list-section">
-                    <div class="category-list-heading">
-                        <h3>Kategori Pemasukan</h3>
-                        <span id="income-count">0 kategori</span>
-                    </div>
-
-                    <div id="income-category-list"
+v id="income-category-list"
                          class="category-list">
                         <p class="category-loading">Memuat kategori...</p>
                     </div>
