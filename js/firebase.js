@@ -14,9 +14,9 @@ import {
 } from
     "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
-// ======================================
-// KONFIGURASI FIREBASE MONETRA
-// ======================================
+// ========================================
+// 1. FIREBASE CONFIGURATION
+// ========================================
 
 const firebaseConfig = {
     apiKey: "AIzaSyCMZ8LhkvXw7VjWjIc4nFdxvhraxFyaoFY",
@@ -28,39 +28,58 @@ const firebaseConfig = {
     measurementId: "G-LN0TCTEMN0"
 };
 
-// ======================================
-// INISIALISASI FIREBASE
-// ======================================
+// ========================================
+// 2. INITIALIZE FIREBASE
+// ========================================
 
 const firebaseApp = initializeApp(firebaseConfig);
 
-// Firebase Authentication
+// ========================================
+// 3. AUTHENTICATION
+// ========================================
+
 const auth = getAuth(firebaseApp);
 
-// Firestore Database
+// ========================================
+// 4. FIRESTORE DATABASE
+// ========================================
+
 const db = getFirestore(firebaseApp);
 
-// ======================================
-// PERSISTENCE LOGIN
-// ======================================
+// ========================================
+// 5. AUTH PERSISTENCE
+// ========================================
 
-// Menjaga sesi login tetap tersimpan
-// setelah browser ditutup atau halaman dimuat ulang.
+// Menyimpan sesi login secara lokal.
+// Pengguna tidak harus login ulang setiap
+// kali membuka kembali browser.
 
 const authPersistence = setPersistence(
     auth,
     browserLocalPersistence
-);
+).catch(error => {
+    console.error("Monetra Persistence Error:", error);
+    throw error;
+});
 
-// ======================================
-// EXPORT
-// ======================================
+// ========================================
+// 6. FIREBASE STATUS
+// ========================================
+
+const firebaseReady = authPersistence.then(() => {
+    console.log("Monetra: Firebase siap digunakan.");
+
+    return true;
+});
+
+// ========================================
+// 7. EXPORT MODULES
+// ========================================
 
 export {
     firebaseApp,
     auth,
     db,
-    authPersistence
+    authPersistence,
+    firebaseReady
 };
-
-console.log("Monetra: Firebase berhasil diinisialisasi.");
